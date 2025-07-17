@@ -68,20 +68,54 @@ class BaseTrainer:
             fail_safe - Bool indicating whether the training to automatically restart in case of any crashes.
         """
 
-        #epoch = -1
         num_tries = 1
         for i in range(num_tries):
             try:
+                # if load_latest:
+                    # self.load_checkpoint(self.settings.selected_sampling_epoch)
                 if load_latest:
-                    self.load_checkpoint(self.settings.selected_sampling_epoch)
+                    latest=0
+                    start_epoch=1
+                    # Construct the full checkpoint path
+                    checkpoint_base = getattr(self, '_checkpoint_dir', '')
+                    checkpoint_full_path = os.path.join(checkpoint_base, 'train', 'seqtrack', 'seqtrack_b256')
+
+                    if os.path.exists(checkpoint_full_path):
+                        import re
+
+                        # Find all checkpoint files and their epochs
+                        checkpoints = [
+                            {
+                                'filename': f,
+                                'epoch': int(match.group(1)),
+                                'path': os.path.join(checkpoint_full_path, f)
+                            }
+                            for f in os.listdir(checkpoint_full_path)
+                            if (f.endswith(('.pth.tar', '.pth')) and
+                                (match := re.search(r'_ep(\d+)\.pth(\.tar)?$', f)))
+                        ]
+
+                        if checkpoints:
+                            # Find the latest checkpoint by epoch
+                            latest = max(checkpoints, key=lambda x: x['epoch'])
+                            start_epoch = max(1, latest['epoch'] + 1)
+                            print(f"Found latest checkpoint: {latest['filename']} (epoch {latest['epoch']})")
+                            self.load_checkpoint(latest['path'])
+                        else:
+                            print(f"No valid checkpoints found in {checkpoint_full_path}. Starting from scratch.")
+                    else:
+                        print(f"Checkpoint directory {checkpoint_full_path} not found. Starting from scratch.")
+
+
+
                 if load_previous_ckpt:
                     directory = '{}/{}'.format(self._checkpoint_dir, self.settings.project_path_prv)
                     self.load_state_dict(directory)
                 if distill:
                     directory_teacher = '{}/{}'.format(self._checkpoint_dir, self.settings.project_path_teacher)
                     self.load_state_dict(directory_teacher, distill=True)
-                #for epoch in range(self.settings.epoch+1, max_epochs+1):
-                for epoch in range(1, max_epochs + 1):
+
+                for epoch in range(start_epoch, max_epochs + 1):
                     self.settings.epoch = epoch
                     data_recorder.set_epoch(settings=self.settings)
 
