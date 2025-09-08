@@ -23,7 +23,7 @@ __pycache__/
 *.pth
 *.tar
 *.zip
-*.log
+#*.log
 *.pdf
 
 # Ignore virtual environments
