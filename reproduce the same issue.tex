@@ -1,0 +1,96 @@
+Let me help you understand why you're seeing identical losses initially and then divergence when resuming training. This is a common issue in deep learning when resuming from checkpoints. Here are the most likely reasons:
+
+Random Number Generator (RNG) States: When you save a checkpoint, you need to save not just the model weights but also the RNG states (PyTorch, NumPy, Python random) to ensure exact reproducibility.
+Data Loading Order: If the data loading uses randomness (shuffling) and the RNG state isn't properly restored, the data order might differ between runs.
+Optimizer State: The optimizer's internal state (like momentum buffers in Adam) must be saved and restored correctly.
+Learning Rate Scheduler: If you're using a learning rate scheduler, its state must also be saved and restored.
+Let me check your training code to see how the checkpointing is implemented.
+
+Semantic searched codebase
+1138 results
+Semantic searchedE:\current_research\dsa\lib\trainwith querysave_checkpoint load_checkpoint
+Let me check how the random number generator states are being handled during checkpointing and data loading.
+
+Semantic searched codebase
+1135 results
+Semantic searchedE:\current_research\dsa\lib\trainwith querytorch.manual_seed numpy.random.seed random.seed
+Let me check the checkpoint loading and saving implementation to identify the cause of the divergence after resuming training.
+
+Analyzed
+base_trainer.py#L1-200
+I've identified the issue with your training resumption. The problem lies in how random number generator (RNG) states are handled during checkpointing. Here's what's happening:
+
+RNG States Not Saved: The 
+save_checkpoint
+ method in 
+base_trainer.py
+ doesn't save the RNG states (PyTorch, NumPy, Python random) when creating a checkpoint. These states determine the randomness in data loading and other operations.
+Identical Losses Initially: When you resume training, the RNG states are reinitialized with the same seed, leading to the same data order for the first few batches. This is why you see identical losses initially.
+Divergence Over Time: As training progresses, small numerical differences (due to floating-point operations) accumulate, causing the training to diverge from the original path.
+Solution:
+You need to modify the checkpoint saving and loading to include RNG states. Here's how to fix it:
+
+Update 
+save_checkpoint
+:
+python
+def save_checkpoint(self):
+    net = self.actor.net.module if multigpu.is_multi_gpu(self.actor.net) else self.actor.net
+    actor_type = type(self.actor).__name__
+    net_type = type(net).__name__
+    
+    # Save RNG states
+    rng_states = {
+        'torch_rng_state': torch.get_rng_state(),
+        'cuda_rng_state': torch.cuda.get_rng_state() if torch.cuda.is_available() else None,
+        'numpy_rng_state': np.random.get_state(),
+        'python_rng_state': random.getstate()
+    }
+    
+    state = {
+        'epoch': self.settings.epoch,
+        'actor_type': actor_type,
+        'net_type': net_type,
+        'net': net.state_dict(),
+        'net_info': getattr(net, 'info', None),
+        'constructor': getattr(net, 'constructor', None),
+        'optimizer': self.optimizer.state_dict(),
+        'stats': self.stats,
+        'settings': self.settings,
+        'rng_states': rng_states  # Add RNG states
+    }
+    # Rest of the method remains the same
+Update 
+load_checkpoint
+:
+python
+def load_checkpoint(self, checkpoint=None, fields=None, ignore_fields=None, load_constructor=False):
+    # ... (existing code to load checkpoint)
+    
+    # Restore RNG states if they exist
+    if 'rng_states' in checkpoint_dict:
+        rng_states = checkpoint_dict['rng_states']
+        torch.set_rng_state(rng_states['torch_rng_state'])
+        if rng_states['cuda_rng_state'] is not None and torch.cuda.is_available():
+            torch.cuda.set_rng_state(rng_states['cuda_rng_state'])
+        np.random.set_state(rng_states['numpy_rng_state'])
+        random.setstate(rng_states['python_rng_state'])
+    # ... (rest of the method)
+Additional Recommendations:
+Set worker_init_fn for DataLoaders: Ensure your data loaders use a consistent random seed for worker processes:
+python
+def worker_init_fn(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+# When creating DataLoader
+dataloader = DataLoader(..., worker_init_fn=worker_init_fn)
+Set torch.backends.cudnn.deterministic: For full reproducibility, add this at the start of your training script:
+python
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+Verify Data Loading Order: After making these changes, verify that the data loading order is consistent between runs by logging sample indices during the first few batches.
+These changes will ensure that when you resume training, the exact same sequence of operations is performed, leading to consistent training behavior.
+
+Feedback submitted
