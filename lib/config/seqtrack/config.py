@@ -1,23 +1,26 @@
 from easydict import EasyDict as edict
 import yaml
+from yacs.config import CfgNode as CN
 
 cfg = edict()
 
+# ------------------------------
 # MODEL
+# ------------------------------
 cfg.MODEL = edict()
-cfg.MODEL.HIDDEN_DIM = 256 # hidden dimension for the decoder and vocabulary
-cfg.MODEL.BINS = 4000 # number of discrete bins
-cfg.MODEL.FEATURE_TYPE = "x" # the input feature to decoder. x, xz, or token
+cfg.MODEL.HIDDEN_DIM = 256        # hidden dimension for the decoder and vocabulary
+cfg.MODEL.BINS = 4000             # number of discrete bins
+cfg.MODEL.FEATURE_TYPE = "x"      # decoder input: x, xz, or token
 
-# MODEL.ENCODER
-# for more customization for encoder, please modify lib/models/seqtrack/vit.py
+# ENCODER
 cfg.MODEL.ENCODER = edict()
-cfg.MODEL.ENCODER.TYPE = "vit_base_patch16" # encoder model
+cfg.MODEL.ENCODER.TYPE = "vit_base_patch16"
 cfg.MODEL.ENCODER.DROP_PATH = 0
-cfg.MODEL.ENCODER.PRETRAIN_TYPE = "mae" # mae, default, or scratch
+cfg.MODEL.ENCODER.PRETRAIN_TYPE = "mae"   # mae, default, or scratch
 cfg.MODEL.ENCODER.STRIDE = 16
-cfg.MODEL.ENCODER.USE_CHECKPOINT = False # to save the memory.
-# MODEL.DECODER
+cfg.MODEL.ENCODER.USE_CHECKPOINT = False  # to save memory
+
+# DECODER
 cfg.MODEL.DECODER = edict()
 cfg.MODEL.DECODER.NHEADS = 8
 cfg.MODEL.DECODER.DROPOUT = 0.1
@@ -25,9 +28,9 @@ cfg.MODEL.DECODER.DIM_FEEDFORWARD = 1024
 cfg.MODEL.DECODER.DEC_LAYERS = 6
 cfg.MODEL.DECODER.PRE_NORM = False
 
-# DATA COLLECTION
-
+# ------------------------------
 # TRAIN
+# ------------------------------
 cfg.TRAIN = edict()
 cfg.TRAIN.LR = 0.0001
 cfg.TRAIN.WEIGHT_DECAY = 0.0001
@@ -37,25 +40,28 @@ cfg.TRAIN.LR_DROP_EPOCH = 400
 cfg.TRAIN.BATCH_SIZE = 8
 cfg.TRAIN.NUM_WORKER = 1
 cfg.TRAIN.OPTIMIZER = "ADAMW"
-cfg.TRAIN.ENCODER_MULTIPLIER = 0.1  # encoder's LR = this factor * LR
-cfg.TRAIN.FREEZE_ENCODER = False # for freezing the parameters of encoder
-cfg.TRAIN.ENCODER_OPEN = [] # only for debug, open some layers of encoder when FREEZE_ENCODER is True
-cfg.TRAIN.CE_WEIGHT = 1.0 # weight for cross-entropy loss
+cfg.TRAIN.ENCODER_MULTIPLIER = 0.1       # encoder LR = this * LR
+cfg.TRAIN.FREEZE_ENCODER = False
+cfg.TRAIN.ENCODER_OPEN = []              # optional: open some layers if freezing
 cfg.TRAIN.GRAD_CLIP_NORM = 0.1
-# TRAIN.SCHEDULER
+
+# SCHEDULER
 cfg.TRAIN.SCHEDULER = edict()
 cfg.TRAIN.SCHEDULER.TYPE = "step"
 cfg.TRAIN.SCHEDULER.DECAY_RATE = 0.1
-cfg.TRAIN.log_sample_stats_interval  = 50
-cfg.TRAIN.ss_print_interval  = 10
-cfg.TRAIN.checkpoint_save_interval =1
-cfg.TRAIN.selected_sampling=False
-cfg.TRAIN.selected_sampling_epoch=2
-cfg.TRAIN.top_sample_ratio=.5
-cfg.TRAIN.top_selected_samples=10
-#cfg.TRAIN.current_epoch=0
 
+# Logging / checkpoints
+cfg.TRAIN.log_sample_stats_interval = 50
+cfg.TRAIN.ss_print_interval = 10
+cfg.TRAIN.checkpoint_save_interval = 1
+cfg.TRAIN.selected_sampling = False
+cfg.TRAIN.selected_sampling_epoch = 2
+cfg.TRAIN.top_sample_ratio = 0.5
+cfg.TRAIN.top_selected_samples = 10
+
+# ------------------------------
 # DATA
+# ------------------------------
 cfg.DATA = edict()
 cfg.DATA.MEAN = [0.485, 0.456, 0.406]
 cfg.DATA.STD = [0.229, 0.224, 0.225]
@@ -63,19 +69,22 @@ cfg.DATA.MAX_SAMPLE_INTERVAL = 200
 cfg.DATA.SAMPLER_MODE = "order"
 cfg.DATA.LOADER = "tracking"
 cfg.DATA.SEQ_FORMAT = "xywh"
-# DATA.TRAIN
+
+# TRAIN DATASETS
 cfg.DATA.TRAIN = edict()
 cfg.DATA.TRAIN.DATASETS_NAME = ["LASOT", "GOT10K_vottrain"]
 cfg.DATA.TRAIN.DATASETS_RATIO = [1, 1]
 cfg.DATA.TRAIN.SAMPLE_PER_EPOCH = 60000
-# DATA.SEARCH
+
+# SEARCH
 cfg.DATA.SEARCH = edict()
-cfg.DATA.SEARCH.NUMBER = 1  #number of search region, only support 1 for now.
+cfg.DATA.SEARCH.NUMBER = 1
 cfg.DATA.SEARCH.SIZE = 256
 cfg.DATA.SEARCH.FACTOR = 4.0
 cfg.DATA.SEARCH.CENTER_JITTER = 3.5
 cfg.DATA.SEARCH.SCALE_JITTER = 0.5
-# DATA.TEMPLATE
+
+# TEMPLATE
 cfg.DATA.TEMPLATE = edict()
 cfg.DATA.TEMPLATE.NUMBER = 1
 cfg.DATA.TEMPLATE.SIZE = 256
@@ -83,14 +92,16 @@ cfg.DATA.TEMPLATE.FACTOR = 4.0
 cfg.DATA.TEMPLATE.CENTER_JITTER = 0
 cfg.DATA.TEMPLATE.SCALE_JITTER = 0
 
+# ------------------------------
 # TEST
+# ------------------------------
 cfg.TEST = edict()
 cfg.TEST.TEMPLATE_FACTOR = 4.0
 cfg.TEST.TEMPLATE_SIZE = 256
 cfg.TEST.SEARCH_FACTOR = 4.0
 cfg.TEST.SEARCH_SIZE = 256
 cfg.TEST.EPOCH = 500
-cfg.TEST.WINDOW = False # window penalty
+cfg.TEST.WINDOW = False
 cfg.TEST.NUM_TEMPLATES = 1
 
 cfg.TEST.UPDATE_INTERVALS = edict()
@@ -113,10 +124,17 @@ cfg.TEST.UPDATE_THRESHOLD.VOT20 = 0.475
 cfg.TEST.UPDATE_THRESHOLD.VOT21 = 0.475
 cfg.TEST.UPDATE_THRESHOLD.VOT22 = 0.475
 
+# ------------------------------
+# LOSS
+# ------------------------------
+cfg.LOSS = CN()
+cfg.LOSS.ce = 1.0
+cfg.LOSS.conf = 0.0   # default (can be overridden in YAML)
 
 
-
-
+# ------------------------------
+# Helpers
+# ------------------------------
 def _edict2dict(dest_dict, src_edict):
     if isinstance(dest_dict, dict) and isinstance(src_edict, dict):
         for k, v in src_edict.items():
@@ -151,7 +169,6 @@ def _update_config(base_cfg, exp_cfg):
 
 
 def update_config_from_file(filename):
-    exp_config = None
     with open(filename) as f:
         exp_config = edict(yaml.safe_load(f))
         _update_config(cfg, exp_config)

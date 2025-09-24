@@ -32,72 +32,99 @@ class SeqTrackActor(BaseActor):
         return loss, status
 
     def forward_pass(self, data):
-        n, b, _, _, _ = data['search_images'].shape   # n,b,c,h,w
+        n, b, _, _, _ = data['search_images'].shape  # n,b,c,h,w
         search_img = data['search_images'].view(-1, *data['search_images'].shape[2:])  # (n*b, c, h, w)
-        search_list = search_img.split(b,dim=0)
+        search_list = search_img.split(b, dim=0)
         template_img = data['template_images'].view(-1, *data['template_images'].shape[2:])
-        template_list = template_img.split(b,dim=0)
-        feature_xz = self.net(images_list=template_list+search_list, mode='encoder') # forward the encoder
+        template_list = template_img.split(b, dim=0)
 
-        bins = self.BINS # coorinate token
-        start = bins + 1 # START token
-        end = bins # End token
-        len_embedding = bins + 2 # number of embeddings, including the coordinate tokens and the special tokens
+        # run encoder
+        feature_xz = self.net(images_list=template_list + search_list, mode='encoder')
 
-        # box of search region
-        targets = data['search_anno'].permute(1,0,2).reshape(-1, data['search_anno'].shape[2])   # x0y0wh
-        targets = box_xywh_to_xyxy(targets)   # x0y0wh --> x0y0x1y1
-        targets = torch.max(targets, torch.tensor([0.]).to(targets)) # Truncate out-of-range values
-        targets = torch.min(targets, torch.tensor([1.]).to(targets))
+        bins = self.BINS
+        start = bins + 1  # START token
+        end = bins  # END token
 
-        # different formats of sequence, for ablation study
+        # box targets
+        targets = data['search_anno'].permute(1, 0, 2).reshape(-1, data['search_anno'].shape[2])  # (n*b, 4)
+        targets = box_xywh_to_xyxy(targets)
+        targets = torch.clamp(targets, 0., 1.)  # keep in [0,1]
+
         if self.seq_format != 'corner':
             targets = box_xyxy_to_cxcywh(targets)
 
-        box = (targets * (bins - 1)).int() # discretize the coordinates
+        box = (targets * (bins - 1)).int()
+        box = torch.clamp(box, 0, bins - 1)
 
         if self.seq_format == 'whxy':
             box = box[:, [2, 3, 0, 1]]
 
         batch = box.shape[0]
-        # inpute sequence
-        input_start = torch.ones([batch, 1]).to(box) * start
+        # input seq: [START, tokens...]
+        input_start = torch.ones([batch, 1], device=box.device, dtype=box.dtype) * start
         input_seqs = torch.cat([input_start, box], dim=1)
-        input_seqs = input_seqs.reshape(b,n,input_seqs.shape[-1])
-        input_seqs = input_seqs.flatten(1)
+        input_seqs = input_seqs.reshape(b, n, input_seqs.shape[-1]).flatten(1)
 
-        # target sequence
-        target_end = torch.ones([batch, 1]).to(box) * end
+        # target seq: [tokens..., END]
+        target_end = torch.ones([batch, 1], device=box.device, dtype=box.dtype) * end
         target_seqs = torch.cat([box, target_end], dim=1)
-        target_seqs = target_seqs.reshape(b, n, target_seqs.shape[-1])
-        target_seqs = target_seqs.flatten()
-        target_seqs = target_seqs.type(dtype=torch.int64)
+        target_seqs = target_seqs.reshape(b, n, target_seqs.shape[-1]).flatten().long()
 
-        outputs = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
+        # run decoder
+        token_logits, conf_logits = self.net(xz=feature_xz, seq=input_seqs, mode="decoder")
 
-        outputs = outputs[-1].reshape(-1, len_embedding)
+        # ensure shapes are (B, T, V) and (B, 1)
+        if token_logits.dim() == 4 and token_logits.size(0) == 1:
+            token_logits = token_logits.squeeze(0)
 
-        return outputs, target_seqs
+        return (token_logits, conf_logits), target_seqs
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
-        # Get loss
-        ce_loss = self.objective['ce'](outputs, targets_seq)
-        # weighted sum
-        loss = self.loss_weight['ce'] * ce_loss
+        # 🔹 Unpack the outputs
+        token_logits, conf_logits = outputs  # (B, T, V), (B, 1)
 
-        outputs = outputs.softmax(-1)
-        outputs = outputs[:, :self.BINS]
-        value, extra_seq = outputs.topk(dim=-1, k=1)
-        boxes_pred = extra_seq.squeeze(-1).reshape(-1,5)[:, 0:-1]
-        boxes_target = targets_seq.reshape(-1,5)[:,0:-1]
-        boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
-        boxes_target = box_cxcywh_to_xyxy(boxes_target)
-        iou = box_iou(boxes_pred, boxes_target)[0].mean()
+        # 🔹 Flatten token logits so CE loss works
+        B, T, V = token_logits.shape
+        token_logits_flat = token_logits.reshape(B * T, V)
+
+        # 🔹 Cross-entropy loss on token prediction
+        ce_loss = self.objective['ce'](token_logits_flat, targets_seq)
+
+        # 🔹 Optional confidence loss (BCE with dummy positives = 1 for now)
+        if conf_logits is not None:
+            conf_target = torch.ones_like(conf_logits)
+            conf_loss = torch.nn.functional.binary_cross_entropy_with_logits(conf_logits, conf_target)
+        else:
+            conf_loss = 0.0
+
+        # 🔹 Weighted sum
+        loss = (
+                self.loss_weight['ce'] * ce_loss
+                + self.loss_weight.get('conf', 0.0) * conf_loss
+        )
+
+        # 🔹 Compute IoU metric (approximate, from discretized tokens)
+        with torch.no_grad():
+            probs = token_logits.softmax(-1)
+            probs = probs[:, :, :self.BINS]  # only coordinate bins
+            _, extra_seq = probs.topk(dim=-1, k=1)
+
+            net_for_attrs = self.net.module if hasattr(self.net, 'module') else self.net
+            tokens_per_seq = net_for_attrs.decoder.num_coordinates + 1
+            boxes_pred = extra_seq.squeeze(-1).reshape(-1, tokens_per_seq)[:, :-1]  # drop END
+            boxes_target = targets_seq.reshape(-1, tokens_per_seq)[:, :-1]
+
+            boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
+            boxes_target = box_cxcywh_to_xyxy(boxes_target)
+            iou = box_iou(boxes_pred, boxes_target)[0].mean()
 
         if return_status:
-            # status for log
-            status = {"Loss/total": loss.item(),
-                      "IoU": iou.item()}
+            status = {
+                "Loss/total": loss.item(),
+                "Loss/ce": ce_loss.item(),
+                "Loss/conf": float(conf_loss) if not isinstance(conf_loss, float) else 0.0,
+                "IoU": iou.item()
+            }
             return loss, status
         else:
             return loss

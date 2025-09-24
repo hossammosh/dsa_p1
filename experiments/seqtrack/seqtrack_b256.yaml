@@ -46,7 +46,6 @@ TRAIN:
   BATCH_SIZE: 1
   max_epochs: 200                               # Number of training epochs
   GRAD_CLIP_NORM: 0.1
-  CE_WEIGHT: 1.0
   LR: 0.0001
   LR_DROP_EPOCH: 8
   NUM_WORKER: 1
@@ -78,3 +77,6 @@ TEST:
     VOT20: 0.55
     VOT21: 0.55
     VOT22: 0.55
+LOSS:
+  ce: 1.0
+  conf: 0.1   # new confidence loss weight (adjust value later)

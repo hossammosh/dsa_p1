@@ -71,7 +71,8 @@ def run(settings):
         weight[bins] = 0.01
         weight[bins + 1] = 0.01
         objective = {'ce': CrossEntropyLoss(weight=weight)}
-        loss_weight = {'ce': cfg.TRAIN.CE_WEIGHT}
+        loss_weight = {'ce': cfg.LOSS.ce, 'conf': cfg.LOSS.conf}
+
         actor = SeqTrackActor(net=net, objective=objective, loss_weight=loss_weight, settings=settings, cfg=cfg)
 
     else:
@@ -83,5 +84,5 @@ def run(settings):
 
     trainer = LTRTrainer(actor, [loader_train], optimizer, settings, lr_scheduler, use_amp=use_amp)
 
-    #trainer.train(cfg.TRAIN.max_epochs, load_latest=True, fail_safe=True)
-    trainer.train(cfg.TRAIN.max_epochs, load_latest=False,load_previous_ckpt=12, fail_safe=True)
+    trainer.train(cfg.TRAIN.max_epochs, load_latest=True, fail_safe=True)
+    #trainer.train(cfg.TRAIN.max_epochs, load_latest=False,load_previous_ckpt=12, fail_safe=True)
