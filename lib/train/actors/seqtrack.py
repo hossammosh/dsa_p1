@@ -80,50 +80,54 @@ class SeqTrackActor(BaseActor):
         return (token_logits, conf_logits), target_seqs
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
-        # 🔹 Unpack the outputs
+        # 🔹 Unpack outputs
         token_logits, conf_logits = outputs  # (B, T, V), (B, 1)
 
-        # 🔹 Flatten token logits so CE loss works
+        # 🔹 Flatten token logits for CE loss
         B, T, V = token_logits.shape
         token_logits_flat = token_logits.reshape(B * T, V)
 
-        # 🔹 Cross-entropy loss on token prediction
+        # 🔹 Cross-entropy loss on tokens
         ce_loss = self.objective['ce'](token_logits_flat, targets_seq)
 
-        # 🔹 Optional confidence loss (BCE with dummy positives = 1 for now)
+        # --- Decode predicted boxes for IoU ---
+        probs = token_logits.softmax(-1)
+        probs = probs[:, :, :self.BINS]  # only coordinate bins
+        _, extra_seq = probs.topk(dim=-1, k=1)  # greedy decode
+
+        net_for_attrs = self.net.module if hasattr(self.net, 'module') else self.net
+        tokens_per_seq = net_for_attrs.decoder.num_coordinates + 1  # [START, x, y, w, h, END]
+        boxes_pred = extra_seq.squeeze(-1).reshape(-1, tokens_per_seq)[:, :-1]  # drop END
+        boxes_target = targets_seq.reshape(-1, tokens_per_seq)[:, :-1]
+
+        boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
+        boxes_target = box_cxcywh_to_xyxy(boxes_target)
+
+        ious = box_iou(boxes_pred, boxes_target)[0]  # (B, B)
+        iou_per_sample = ious.diag()  # (B,)
+
+        # --- Confidence loss ---
         if conf_logits is not None:
-            conf_target = torch.ones_like(conf_logits)
-            conf_loss = torch.nn.functional.binary_cross_entropy_with_logits(conf_logits, conf_target)
+            tau = 0.5  # IoU threshold for supervision
+            conf_target = (iou_per_sample >= tau).float()  # (B,)
+            conf_pred = conf_logits.squeeze(-1)  # (B,)
+            conf_loss = torch.nn.functional.binary_cross_entropy_with_logits(conf_pred, conf_target)
         else:
             conf_loss = 0.0
 
-        # 🔹 Weighted sum
+        # --- Weighted sum ---
         loss = (
                 self.loss_weight['ce'] * ce_loss
                 + self.loss_weight.get('conf', 0.0) * conf_loss
         )
 
-        # 🔹 Compute IoU metric (approximate, from discretized tokens)
-        with torch.no_grad():
-            probs = token_logits.softmax(-1)
-            probs = probs[:, :, :self.BINS]  # only coordinate bins
-            _, extra_seq = probs.topk(dim=-1, k=1)
-
-            net_for_attrs = self.net.module if hasattr(self.net, 'module') else self.net
-            tokens_per_seq = net_for_attrs.decoder.num_coordinates + 1
-            boxes_pred = extra_seq.squeeze(-1).reshape(-1, tokens_per_seq)[:, :-1]  # drop END
-            boxes_target = targets_seq.reshape(-1, tokens_per_seq)[:, :-1]
-
-            boxes_pred = box_cxcywh_to_xyxy(boxes_pred)
-            boxes_target = box_cxcywh_to_xyxy(boxes_target)
-            iou = box_iou(boxes_pred, boxes_target)[0].mean()
-
+        # --- Status dict for logging ---
         if return_status:
             status = {
                 "Loss/total": loss.item(),
                 "Loss/ce": ce_loss.item(),
                 "Loss/conf": float(conf_loss) if not isinstance(conf_loss, float) else 0.0,
-                "IoU": iou.item()
+                "IoU": iou_per_sample.mean().item()
             }
             return loss, status
         else:
