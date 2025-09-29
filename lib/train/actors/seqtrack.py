@@ -109,8 +109,8 @@ class SeqTrackActor(BaseActor):
         # --- Confidence loss ---
         if conf_logits is not None:
             tau = 0.5  # IoU threshold for supervision
-            conf_target = (iou_per_sample >= tau).float()  # (B,)
-            conf_pred = conf_logits.squeeze(-1)  # (B,)
+            conf_target = (iou_per_sample >= tau).float().view(-1)  # (B,)
+            conf_pred = conf_logits.view(-1)  # (B,)
             conf_loss = torch.nn.functional.binary_cross_entropy_with_logits(conf_pred, conf_target)
         else:
             conf_loss = 0.0

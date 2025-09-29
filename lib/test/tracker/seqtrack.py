@@ -89,16 +89,20 @@ class SEQTRACK(BaseTracker):
         if self.seq_format == 'whxy':
             pred_boxes = pred_boxes[:, [2, 3, 0, 1]]
 
-        pred_boxes = pred_boxes / (self.bins-1)
+        pred_boxes = pred_boxes / (self.bins - 1)
         pred_box = (pred_boxes.mean(dim=0) * self.params.search_size / resize_factor).tolist()  # (cx, cy, w, h) [0,1]
 
         # get the final box result
         self.state = clip_box(self.map_box_back(pred_box, resize_factor), H, W, margin=10)
 
-        # update the template
+        # ============================
+        # 🔹 Confidence-aware gating (Step 2c)
+        # ============================
         if self.num_template > 1:
-            conf_score = out_dict['confidence'].sum().item() * 10 # the confidence score
-            if (self.frame_id % self.update_intervals == 0) and (conf_score > self.update_threshold):
+            # sigmoid → confidence ∈ [0,1]
+            conf_score = torch.sigmoid(out_dict['confidence'].mean()).item()
+
+            if (self.frame_id % self.update_intervals == 0) and (conf_score >= self.update_threshold):
                 z_patch_arr, _ = sample_target(image, self.state, self.params.template_factor,
                                                output_sz=self.params.template_size)
                 template = self.preprocessor.process(z_patch_arr)
@@ -110,7 +114,7 @@ class SEQTRACK(BaseTracker):
         if self.debug == 1:
             x1, y1, w, h = self.state
             image_BGR = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            cv2.rectangle(image_BGR, (int(x1),int(y1)), (int(x1+w),int(y1+h)), color=(0,0,255), thickness=2)
+            cv2.rectangle(image_BGR, (int(x1), int(y1)), (int(x1 + w), int(y1 + h)), color=(0, 0, 255), thickness=2)
             cv2.imshow('vis', image_BGR)
             cv2.waitKey(1)
 
