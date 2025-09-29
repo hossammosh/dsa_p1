@@ -44,7 +44,7 @@ MODEL:
 TRAIN:
   ENCODER_MULTIPLIER: 0.1
   BATCH_SIZE: 1
-  max_epochs: 200                               # Number of training epochs
+  max_epochs: 10                               # Number of training epochs
   GRAD_CLIP_NORM: 0.1
   LR: 0.0001
   LR_DROP_EPOCH: 8
@@ -62,7 +62,7 @@ TRAIN:
   top_selected_samples: 2
   #current_epoch: 0
 TEST:
-  EPOCH: 1
+  EPOCH: 3
   SEARCH_FACTOR: 4.0
   SEARCH_SIZE: 256
   TEMPLATE_FACTOR: 4.0
