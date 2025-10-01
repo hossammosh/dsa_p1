@@ -76,10 +76,13 @@ class SEQTRACK(BaseTracker):
 
         # run the decoder
         with torch.no_grad():
-            out_dict = self.network.inference_decoder(xz=xz,
-                                                      sequence=self.init_seq,
-                                                      window=self.hanning,
-                                                      seq_format=self.seq_format)
+            out_dict = self.network.inference_decoder(
+                xz=xz,
+                sequence=self.init_seq,
+                vocab_embed=self.network.vocab_embed,  # 🔹 add this
+                window=self.hanning,
+                seq_format=self.seq_format
+            )
 
         pred_boxes = out_dict['pred_boxes'].view(-1, 4)
 

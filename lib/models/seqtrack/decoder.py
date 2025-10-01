@@ -118,48 +118,55 @@ class SeqTrackDecoder(nn.Module):
         return token_logits, conf_logits
         return hs
 
-
-    def inference(self, src, pos_embed, seq, vocab_embed,
-                  window, seq_format):
-        # flatten NxCxHxW to HWxNxC
+    def inference(self, src, pos_embed, seq, window, seq_format):
         n, bs, c = src.shape
         memory = src
         confidence_list = []
-        box_pos = [0, 1, 2, 3] # the position of bounding box
-        center_pos = [0, 1]  # the position of x_center and y_center
+        box_pos = [0, 1, 2, 3]  # x, y, w, h positions
+        center_pos = [0, 1]  # default: cx, cy
         if seq_format == 'whxy':
             center_pos = [2, 3]
 
-        for i in range(self.num_coordinates): # only cycle 4 times, because we do not need to predict the end token during inference
+        for i in range(self.num_coordinates):  # only predict 4 tokens (no END token)
             tgt = self.embedding(seq).permute(1, 0, 2)
             query_embed = self.embedding.position_embeddings.weight.unsqueeze(1)
             query_embed = query_embed.repeat(1, bs, 1)
             tgt_mask = generate_square_subsequent_mask(len(tgt)).to(tgt.device)
 
-            hs = self.body(tgt, memory, pos=pos_embed[:len(memory)], query_pos=query_embed[:len(tgt)],
-                              tgt_mask=tgt_mask, memory_mask=None)
+            hs = self.body(
+                tgt, memory,
+                pos=pos_embed[:len(memory)],
+                query_pos=query_embed[:len(tgt)],
+                tgt_mask=tgt_mask,
+                memory_mask=None
+            )
 
-            # embedding --> likelihood
-            out = vocab_embed(hs.transpose(1, 2)[-1, :, -1, :])
+            # (num_layers, T, B, D) → take last layer
+            if hs.dim() == 4:
+                hs = hs[-1]
+
+            # (T, B, D) → take last token
+            last_token = hs[-1, :, :]  # (B, D)
+
+            # use bbox_head for token prediction
+            out = self.bbox_head(last_token)  # (B, bins+2)
             out = out.softmax(-1)
 
             if i in box_pos:
-                out = out[:, :self.bins] # only include the coordinate values' confidence
+                out = out[:, :self.bins]  # only coordinate bins
 
-            if ((i in center_pos) and (window!=None)):
-                out = out * window # window penalty
+            if (i in center_pos) and (window is not None):
+                out = out * window  # apply penalty
 
             confidence, token_generated = out.topk(dim=-1, k=1)
             seq = torch.cat([seq, token_generated], dim=-1)
             confidence_list.append(confidence)
 
-        out_dict = {}
-        out_dict['pred_boxes'] = seq[:, -self.num_coordinates:] # Discard the START token, only get the bounding box
-        out_dict['confidence'] = torch.cat(confidence_list, dim=-1)[:, :]
-
+        out_dict = {
+            "pred_boxes": seq[:, -self.num_coordinates:],  # final 4 tokens
+            "confidence": torch.cat(confidence_list, dim=-1)
+        }
         return out_dict
-
-
 
 
 def generate_square_subsequent_mask(sz):
