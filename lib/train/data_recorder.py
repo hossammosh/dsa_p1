@@ -14,7 +14,7 @@ from openpyxl.utils import get_column_letter
 import glob  # Import glob for file pattern matching
 
 # --- Configuration ---
-_chunk_size = 200                                                                    # Save every 10,000 samples
+_chunk_size = 1000                                                                    # Save every 10,000 samples
 _delete_chunks_after_merge = True  # Set to False to keep intermediate chunk files
 select_sampling = False
 # --- Global State (Protected by Lock) ---
@@ -29,7 +29,7 @@ selected_sampling_epoch=0
 mysettings=None
 # Define headers based on the original structure
 _headers = [
-    "Index", "Sample Index", "stats/Loss_total", "stats_IoU", "Seq Name",
+    "Index", "Sample Index", "stats/Loss_total", "stats_IoU", "Confidence", "Seq Name",
     "Template Frame ID", "Template Frame Path", "Search Frame ID", "Seq ID",
     "Seq Path", "Class Name", "Vid ID", "Search Names", "Search Path"
 ]
@@ -283,10 +283,11 @@ def samples_stats_save(sample_index: int, data_info: dict, stats: dict):
             "Sample Index": sample_index,
             "stats/Loss_total": stats.get("Loss/total", None),
             "stats_IoU": stats.get("IoU", None),
+            "Confidence": stats.get("Confidence", None),
             "Seq Name": data_info.get("seq_name", ""),
             "Template Frame ID": _safe_str_list(data_info.get("template_ids")),
             "Template Frame Path": _safe_str_list(data_info.get("template_path")),
-            "Search Frame ID": _safe_str_list(data_info.get("search_id")),
+            "Search Frame ID": _safe_str_list(data_info.get("search_ids")),
             "Seq ID": data_info.get("seq_id", ""),
             "Seq Path": data_info.get("seq_path", ""),
             "Class Name": data_info.get("class_name", ""),

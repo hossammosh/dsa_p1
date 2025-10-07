@@ -31,7 +31,7 @@ DATA:
 #    - 1
 #    - 1
 #    - 1
-    SAMPLE_PER_EPOCH: 200                     # Number of training samples per epoch
+    SAMPLE_PER_EPOCH: 1000                     # Number of training samples per epoch
 MODEL:
   ENCODER:
     TYPE: vit_base_patch16
@@ -44,7 +44,7 @@ MODEL:
 TRAIN:
   ENCODER_MULTIPLIER: 0.1
   BATCH_SIZE: 1
-  max_epochs: 10                               # Number of training epochs
+  max_epochs: 100                               # Number of training epochs
   GRAD_CLIP_NORM: 0.1
   LR: 0.0001
   LR_DROP_EPOCH: 8
@@ -54,7 +54,7 @@ TRAIN:
     TYPE: step
     DECAY_RATE: 0.1
   WEIGHT_DECAY: 0.0001
-  ss_print_interval: 100
+  ss_print_interval: 1000
   checkpoint_save_interval: 1               # Number of epochs between checkpoints
   selected_sampling: false                   # Whether to use selected sampling
   selected_sampling_epoch: 3
@@ -79,4 +79,4 @@ TEST:
     VOT22: 0.55
 LOSS:
   ce: 1.0
-  conf: 0.1   # new confidence loss weight (adjust value later)
+  conf: 0.3   # new confidence loss weight (adjust value later)

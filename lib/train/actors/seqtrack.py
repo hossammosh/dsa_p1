@@ -80,14 +80,14 @@ class SeqTrackActor(BaseActor):
         return (token_logits, conf_logits), target_seqs
 
     def compute_losses(self, outputs, targets_seq, return_status=True):
-        # 🔹 Unpack outputs
+        # Unpack outputs
         token_logits, conf_logits = outputs  # (B, T, V), (B, 1)
 
-        # 🔹 Flatten token logits for CE loss
+        # Flatten token logits for CE loss
         B, T, V = token_logits.shape
         token_logits_flat = token_logits.reshape(B * T, V)
 
-        # 🔹 Cross-entropy loss on tokens
+        # Cross-entropy loss on tokens
         ce_loss = self.objective['ce'](token_logits_flat, targets_seq)
 
         # --- Decode predicted boxes for IoU ---
@@ -127,7 +127,8 @@ class SeqTrackActor(BaseActor):
                 "Loss/total": loss.item(),
                 "Loss/ce": ce_loss.item(),
                 "Loss/conf": float(conf_loss) if not isinstance(conf_loss, float) else 0.0,
-                "IoU": iou_per_sample.mean().item()
+                "IoU": iou_per_sample.mean().item(),
+                "Confidence": torch.sigmoid(conf_logits).mean().item() if conf_logits is not None else 0.0
             }
             return loss, status
         else:

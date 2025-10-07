@@ -79,7 +79,7 @@ class SEQTRACK(BaseTracker):
             out_dict = self.network.inference_decoder(
                 xz=xz,
                 sequence=self.init_seq,
-                vocab_embed=self.network.vocab_embed,  # 🔹 add this
+                #vocab_embed = self.network.decoder.bbox_head,  # 🔹 add this
                 window=self.hanning,
                 seq_format=self.seq_format
             )
