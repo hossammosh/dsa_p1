@@ -116,7 +116,6 @@ class SeqTrackDecoder(nn.Module):
         conf_logits = self.conf_head(last_hidden)  # (B, 1)
         token_logits = self.bbox_head(hs)
         return token_logits, conf_logits
-        return hs
 
     def inference(self, src, pos_embed, seq, window, seq_format):
         n, bs, c = src.shape
