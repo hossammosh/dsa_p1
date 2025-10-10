@@ -45,8 +45,7 @@ class Lasot(BaseVideoDataset):
         self.sequence_list = self._build_sequence_list(vid_ids, split)
         # --- Class filtering (from YAML) ---
         try:
-            from lib.train.admin.settings import Settings
-            cfg = Settings()
+            from lib.config.seqtrack.config import cfg
             cls_cfg = cfg.DATA.TRAIN.CLASSES
             if getattr(cls_cfg, "ENABLED", False):
                 allowed = set(cls_cfg.NAMES)
