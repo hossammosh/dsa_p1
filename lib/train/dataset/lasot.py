@@ -43,6 +43,20 @@ class Lasot(BaseVideoDataset):
         self.class_to_id = {cls_name: cls_id for cls_id, cls_name in enumerate(self.class_list)}
 
         self.sequence_list = self._build_sequence_list(vid_ids, split)
+        # --- Class filtering (from YAML) ---
+        try:
+            from lib.train.admin.settings import Settings
+            cfg = Settings()
+            cls_cfg = cfg.DATA.TRAIN.CLASSES
+            if getattr(cls_cfg, "ENABLED", False):
+                allowed = set(cls_cfg.NAMES)
+                self.sequence_list = [s for s in self.sequence_list if s.split('-')[0] in allowed]
+                print(f"✅ Using {len(self.sequence_list)} sequences from classes: {allowed}")
+            else:
+                print("✅ Class filtering disabled — using all classes.")
+        except Exception as e:
+            print(f"⚠️ Class filtering skipped ({e})")
+        # -----------------------------------
 
         if data_fraction is not None:
             self.sequence_list = random.sample(self.sequence_list, int(len(self.sequence_list)*data_fraction))

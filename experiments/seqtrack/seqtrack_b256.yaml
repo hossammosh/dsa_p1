@@ -21,6 +21,9 @@ DATA:
     SIZE: 256
     NUMBER: 2
   TRAIN:
+    CLASSES:
+      ENABLED: true      # set true to restrict training
+      NAMES: ["car", "person"]
     DATASETS_NAME:
     - LASOT
 #    - GOT10K_vottrain
