@@ -13,6 +13,14 @@ trackers.extend(trackerlist(name='seqtrack', parameter_name='seqtrack_b256', dat
 
 dataset = get_dataset(dataset_name)
 
+selected_names = [
+    "volleyball-13", "hand-9", "bicycle-9", "guitar-16", "basketball-11",
+    "sepia-13", "leopard-16", "bus-19", "hand-16", "bottle-12"
+]
+dataset = [seq for seq in dataset if seq.name in selected_names]
+print(f"🔹 Evaluating only {len(dataset)} selected sequences.")
+
+
 print_results(trackers, dataset, dataset_name, merge_results=True, plot_types=('success', 'prec', 'norm_prec'),
               force_evaluation=True)
 

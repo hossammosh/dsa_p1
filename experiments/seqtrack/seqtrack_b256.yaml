@@ -31,7 +31,7 @@ DATA:
 #    - 1
 #    - 1
 #    - 1
-    SAMPLE_PER_EPOCH: 20                    # Number of training samples per epoch
+    SAMPLE_PER_EPOCH: 10                  # Number of training samples per epoch
 MODEL:
   ENCODER:
     TYPE: vit_base_patch16
@@ -62,7 +62,7 @@ TRAIN:
   top_selected_samples: 2
   #current_epoch: 0
 TEST:
-  EPOCH: 3
+  EPOCH: 4
   SEARCH_FACTOR: 4.0
   SEARCH_SIZE: 256
   TEMPLATE_FACTOR: 4.0
@@ -79,4 +79,4 @@ TEST:
     VOT22: 0.55
 LOSS:
   ce: 1.0
-  conf: 1   # new confidence loss weight (adjust value later)
+  conf: 1.0   # new confidence loss weight (adjust value later)

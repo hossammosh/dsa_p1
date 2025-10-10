@@ -173,6 +173,15 @@ def run_dataset(dataset, trackers, debug=False, threads=0, num_gpus=8):
         mode = 'parallel'
 
     if mode == 'sequential':
+        # --- Mini-benchmark filter (10 selected sequences) ---
+        selected_names = [
+            "volleyball-13", "hand-9", "bicycle-9", "guitar-16", "basketball-11",
+            "sepia-13", "leopard-16", "bus-19", "hand-16", "bottle-12"
+        ]
+        dataset = [seq for seq in dataset if seq.name in selected_names]
+        print(f"🔹 Running mini-benchmark on {len(dataset)} unseen test sequences.")
+        # -----------------------------------------------------
+
         for seq in dataset:
             for tracker_info in trackers:
                 run_sequence(seq, tracker_info, debug=debug)

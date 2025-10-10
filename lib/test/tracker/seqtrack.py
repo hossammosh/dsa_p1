@@ -105,6 +105,17 @@ class SEQTRACK(BaseTracker):
             # sigmoid → confidence ∈ [0,1]
             conf_score = torch.sigmoid(out_dict['confidence'].mean()).item()
 
+
+            # --- Dynamic threshold adjustment ---
+            if not hasattr(self, "conf_hist"):
+                self.conf_hist = []
+            self.conf_hist.append(conf_score)
+            if len(self.conf_hist) > 100:
+                self.conf_hist.pop(0)
+            mean_conf = sum(self.conf_hist) / len(self.conf_hist)
+            self.update_threshold = mean_conf - 0.05
+            # ------------------------------------
+
             if (self.frame_id % self.update_intervals == 0) and (conf_score >= self.update_threshold):
                 z_patch_arr, _ = sample_target(image, self.state, self.params.template_factor,
                                                output_sz=self.params.template_size)
