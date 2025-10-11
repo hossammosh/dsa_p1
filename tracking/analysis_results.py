@@ -2,25 +2,40 @@ import _init_paths
 import matplotlib.pyplot as plt
 plt.rcParams['figure.figsize'] = [8, 8]
 
-from lib.test.analysis.plot_results import plot_results, print_results, print_per_sequence_results
+from lib.test.analysis.plot_results import print_results
 from lib.test.evaluation import get_dataset, trackerlist
+from lib.config.seqtrack.config import cfg, update_config_from_file
+
+# --- Load YAML config ---
+update_config_from_file("experiments/seqtrack/seqtrack_b256.yaml")
 
 trackers = []
-dataset_name = 'lasot' # choosen from 'uav', 'nfs', 'lasot_extension_subset', 'lasot'
-
-trackers.extend(trackerlist(name='seqtrack', parameter_name='seqtrack_b256', dataset_name=dataset_name,
-                            run_ids=None, display_name='seqtrack_b256'))
+dataset_name = 'lasot'
+trackers.extend(trackerlist(
+    name='seqtrack',
+    parameter_name='seqtrack_b256',
+    dataset_name=dataset_name,
+    run_ids=None,
+    display_name='seqtrack_b256'
+))
 
 dataset = get_dataset(dataset_name)
 
-selected_names = [
-    "volleyball-13", "hand-9", "bicycle-9", "guitar-16", "basketball-11",
-    "sepia-13", "leopard-16", "bus-19", "hand-16", "bottle-12"
-]
-dataset = [seq for seq in dataset if seq.name in selected_names]
-print(f"🔹 Evaluating only {len(dataset)} selected sequences.")
+# --- Filter sequences by YAML CLASSES if enabled ---
+cls_cfg = cfg.DATA.TRAIN.CLASSES
+if getattr(cls_cfg, "ENABLED", False):
+    allowed = set(cls_cfg.NAMES)
+    dataset = [seq for seq in dataset if seq.name.split('-')[0] in allowed]
+    print(f"✅ Evaluating only classes: {allowed} ({len(dataset)} sequences)")
+else:
+    print("✅ Class filtering disabled — evaluating all sequences.")
 
-
-print_results(trackers, dataset, dataset_name, merge_results=True, plot_types=('success', 'prec', 'norm_prec'),
-              force_evaluation=True)
-
+# --- Run evaluation ---
+print_results(
+    trackers,
+    dataset,
+    dataset_name,
+    merge_results=True,
+    plot_types=('success', 'prec', 'norm_prec'),
+    force_evaluation=True
+)

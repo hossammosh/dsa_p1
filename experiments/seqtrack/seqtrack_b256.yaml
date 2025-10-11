@@ -34,7 +34,7 @@ DATA:
 #    - 1
 #    - 1
 #    - 1
-    SAMPLE_PER_EPOCH: 1000                  # Number of training samples per epoch
+    SAMPLE_PER_EPOCH: 10                  # Number of training samples per epoch
 MODEL:
   ENCODER:
     TYPE: vit_base_patch16
@@ -50,7 +50,7 @@ TRAIN:
   max_epochs: 20                               # Number of training epochs
   GRAD_CLIP_NORM: 0.1
   LR: 0.0001
-  LR_DROP_EPOCH: 8
+  LR_DROP_EPOCH: 35
   NUM_WORKER: 1
   OPTIMIZER: ADAMW
   SCHEDULER:
@@ -65,7 +65,7 @@ TRAIN:
   top_selected_samples: 2
   #current_epoch: 0
 TEST:
-  EPOCH: 4
+  EPOCH: 20
   SEARCH_FACTOR: 4.0
   SEARCH_SIZE: 256
   TEMPLATE_FACTOR: 4.0
@@ -82,4 +82,4 @@ TEST:
     VOT22: 0.55
 LOSS:
   ce: 1.0
-  conf: 0.0   # new confidence loss weight (adjust value later)
+  conf: 1.0   # new confidence loss weight (adjust value later)

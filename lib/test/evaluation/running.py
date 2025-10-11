@@ -173,13 +173,17 @@ def run_dataset(dataset, trackers, debug=False, threads=0, num_gpus=8):
         mode = 'parallel'
 
     if mode == 'sequential':
-        # --- Mini-benchmark filter (10 selected sequences) ---
-        selected_names = [
-            "volleyball-13", "hand-9", "bicycle-9", "guitar-16", "basketball-11",
-            "sepia-13", "leopard-16", "bus-19", "hand-16", "bottle-12"
-        ]
-        dataset = [seq for seq in dataset if seq.name in selected_names]
-        print(f"🔹 Running mini-benchmark on {len(dataset)} unseen test sequences.")
+        # --- Filter test sequences based on YAML class list ---
+        from lib.config.seqtrack.config import cfg, update_config_from_file
+        update_config_from_file("experiments/seqtrack/seqtrack_b256.yaml")
+
+        cls_cfg = cfg.DATA.TRAIN.CLASSES
+        if getattr(cls_cfg, "ENABLED", False):
+            allowed = set(cls_cfg.NAMES)
+            dataset = [seq for seq in dataset if seq.name.split('-')[0] in allowed]
+            print(f"✅ Testing only on YAML classes: {allowed} ({len(dataset)} sequences)")
+        else:
+            print("✅ Class filtering disabled — running on all sequences.")
         # -----------------------------------------------------
 
         for seq in dataset:
